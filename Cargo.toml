@@ -1,0 +1,21 @@
+[package]
+name = "incremental-file"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.51"
+async-trait = "0.1.52"
+blake3 = "1.2.0"
+hex = "0.4.3"
+serde = { version = "1.0.132", features = ["derive"] }
+tokio = "1.15.0"
+
+[workspace]
+members = [
+    "crates/incremental-file-http",
+    "crates/incremental-file-local",
+    "crates/incremental-file-converter-json",
+    "crates/incremental-file-converter-toml",
+    "crates/incremental-file-converter-bincode",
+]

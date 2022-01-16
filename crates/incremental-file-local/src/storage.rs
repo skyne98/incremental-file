@@ -75,7 +75,7 @@ impl<C: Converter> Storage for FileSystemStorage<C> {
                 ));
             }
             let hash = blake3::hash(bytes.as_slice());
-            if format!("{}", blake3::hash(&bytes)) != block.hash {
+            if format!("{}", hash) != block.hash {
                 return Err(anyhow::anyhow!(
                     "Data read for block with hash {} doesn't match its hash",
                     block.hash

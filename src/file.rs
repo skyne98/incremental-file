@@ -1,6 +1,7 @@
 use crate::{
     block::Block,
-    storage::{BoxedStorage, Storage},
+    crypto::{parse_public_key, KeyPair, PublicKey},
+    storage::Storage,
 };
 use anyhow::{Context, Result};
 use blake3::Hash;
@@ -10,12 +11,16 @@ use serde::{Deserialize, Serialize};
 pub struct File {
     pub blocks: Vec<Block>,
     pub hash: String,
-    // TODO: Add signature
+    pub signature: Option<String>,
 }
 
 impl File {
     pub fn new(blocks: Vec<Block>, hash: String) -> File {
-        File { blocks, hash }
+        File {
+            blocks,
+            hash,
+            signature: None,
+        }
     }
     pub async fn from_data<D: AsRef<[u8]>, S: Storage>(
         data: D,
@@ -44,7 +49,16 @@ impl File {
             storage.upsert_block_data(&block, data).await?;
         }
         let hash = format!("{}", blake3::hash(data));
-        Ok(File { blocks, hash })
+        Ok(File {
+            blocks,
+            hash,
+            signature: None,
+        })
+    }
+    pub fn sign(&mut self, keypair: &KeyPair) -> Result<()> {
+        let signature = keypair.sign(self.hash.as_bytes());
+        self.signature = Some(hex::encode(signature));
+        Ok(())
     }
     pub fn hash(&self) -> Result<Hash> {
         let hash = self.hash.parse()?;
@@ -78,10 +92,25 @@ impl File {
         let hash = self.hash()?;
         let data = self.data(storage).await?;
         let hash_data = blake3::hash(data.as_slice());
+        // Validate hash
         if hash != hash_data {
             Err(anyhow::anyhow!("Invalid hash"))
         } else {
-            Ok(())
+            // Validate signature
+            if let Some(signature) = &self.signature {
+                let signature = hex::decode(signature)?;
+                let public_key = parse_public_key(signature.as_slice());
+                if let Err(verify_err) = public_key.verify(data.as_slice(), &signature) {
+                    Err(anyhow::anyhow!(format!(
+                        "Invalid signature: {}",
+                        verify_err
+                    )))
+                } else {
+                    Ok(())
+                }
+            } else {
+                Ok(())
+            }
         }
     }
     pub async fn unfinished_blocks<S: Storage>(&self, storage: &S) -> Result<Vec<Block>> {

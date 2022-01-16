@@ -4,4 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-trait = "0.1.52"
+anyhow = "1.0.52"
 reqwest = "0.11.8"
+url = { version = "2.2.2", features = ["serde"] }
+incremental-file = { path = "../../../incremental-file" }

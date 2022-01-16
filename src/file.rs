@@ -56,7 +56,8 @@ impl File {
         })
     }
     pub fn sign(&mut self, keypair: &KeyPair) -> Result<()> {
-        let signature = keypair.sign(self.hash.as_bytes());
+        let hash = self.hash()?;
+        let signature = keypair.sign(hash.as_bytes());
         self.signature = Some(hex::encode(signature));
         Ok(())
     }
@@ -84,20 +85,34 @@ impl File {
         if hash != hash_data {
             Err(anyhow::anyhow!("Invalid hash"))
         } else {
+            Ok(())
+        }
+    }
+    pub async fn validate_and_verify<S: Storage>(
+        &self,
+        storage: &S,
+        public_key: &PublicKey,
+    ) -> Result<()> {
+        let hash = self.hash()?;
+        let data = self.data(storage).await?;
+        let hash_data = blake3::hash(data.as_slice());
+        // Validate hash
+        if hash != hash_data {
+            Err(anyhow::anyhow!("Invalid hash"))
+        } else {
             // Validate signature
             if let Some(signature) = &self.signature {
                 let signature = hex::decode(signature)?;
-                let public_key = parse_public_key(signature.as_slice());
-                if let Err(verify_err) = public_key.verify(data.as_slice(), &signature) {
+                if let Err(verify_err) = public_key.verify(hash.as_bytes(), &signature) {
                     Err(anyhow::anyhow!(format!(
-                        "Invalid signature: {}",
-                        verify_err
+                        "Signature {:?} is invalid: {}",
+                        signature, verify_err
                     )))
                 } else {
                     Ok(())
                 }
             } else {
-                Ok(())
+                Err(anyhow::anyhow!("No signature"))
             }
         }
     }
@@ -109,5 +124,10 @@ impl File {
             }
         }
         Ok(unfinished_blocks)
+    }
+    pub async fn progress<S: Storage>(&self, storage: &S) -> Result<f64> {
+        let unfinished_blocks = self.unfinished_blocks(storage).await?;
+        let progress = unfinished_blocks.len() as f64 / self.blocks.len() as f64;
+        Ok(progress)
     }
 }

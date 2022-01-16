@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use incremental_file::{
+    crypto::{generate_keypair, get_public_key, parse_public_key},
     file::File,
     storage::{MemoryStorage, Storage},
 };
@@ -84,5 +85,49 @@ async fn file_validation_succeeds() -> Result<()> {
     let data = (0..100).collect::<Vec<u8>>();
     let file = File::from_data(&data, 10, &mut storage).await?;
     assert!(file.validate(&storage).await.is_ok());
+    Ok(())
+}
+#[tokio::test]
+async fn crypto_signature_works() -> Result<()> {
+    let data = (0..100).collect::<Vec<u8>>();
+    let keypair = generate_keypair()?;
+    let public_key = get_public_key(&keypair)?;
+    let public_key = parse_public_key(&public_key);
+    let signature = keypair.sign(&data);
+    public_key.verify(&data, signature.as_ref()).unwrap();
+    Ok(())
+}
+#[tokio::test]
+async fn crypto_signature_fails() -> Result<()> {
+    let data = (0..100).collect::<Vec<u8>>();
+    let keypair = generate_keypair()?;
+    let public_key = get_public_key(&keypair)?;
+    let public_key = parse_public_key(&public_key);
+    assert_eq!(
+        public_key.verify(&data, vec![0, 0, 0].as_slice()).is_err(),
+        true
+    );
+    Ok(())
+}
+#[tokio::test]
+async fn crypto_hex_encoding_works() -> Result<()> {
+    let data = (0..100).collect::<Vec<u8>>();
+    let keypair = generate_keypair()?;
+    let public_key = get_public_key(&keypair)?;
+    let public_key = parse_public_key(&public_key);
+    let signature = hex::decode(hex::encode(keypair.sign(&data)))?;
+    public_key.verify(&data, signature.as_ref()).unwrap();
+    Ok(())
+}
+#[tokio::test]
+async fn file_can_sign_and_verify() -> Result<()> {
+    let mut storage = MemoryStorage::new();
+    let data = (0..100).collect::<Vec<u8>>();
+    let mut file = File::from_data(&data, 10, &mut storage).await?;
+    let keypair = generate_keypair()?;
+    let public_key = get_public_key(&keypair)?;
+    let public_key = parse_public_key(&public_key);
+    file.sign(&keypair)?;
+    file.validate_and_verify(&storage, &public_key).await?;
     Ok(())
 }

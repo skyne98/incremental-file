@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct File {
     pub blocks: Vec<Block>,
     pub hash: String,
@@ -36,17 +36,17 @@ impl File {
             block_data.push(*byte);
             block_length += 1;
             if block_length == block_size {
-                let block = Block::from_data(block_data);
+                let block = Block::from_data(&block_data);
                 blocks.push(block.clone());
-                storage.upsert_block_data(&block, data).await?;
+                storage.upsert_block_data(&block, block_data).await?;
                 block_data = Vec::new();
                 block_length = 0;
             }
         }
         if block_data.len() > 0 {
-            let block = Block::from_data(block_data);
+            let block = Block::from_data(&block_data);
             blocks.push(block.clone());
-            storage.upsert_block_data(&block, data).await?;
+            storage.upsert_block_data(&block, &block_data).await?;
         }
         let hash = format!("{}", blake3::hash(data));
         Ok(File {
@@ -63,18 +63,6 @@ impl File {
     pub fn hash(&self) -> Result<Hash> {
         let hash = self.hash.parse()?;
         Ok(hash)
-    }
-    pub fn update_block(&mut self, block: Block) -> Result<()> {
-        let hash = block.hash()?;
-        let hash_str = format!("{}", hash);
-        let index = self
-            .blocks
-            .iter()
-            .position(|b| b.hash == hash_str)
-            .context("File doesn't contain this block")?;
-        self.blocks[index] = block;
-
-        Ok(())
     }
     pub async fn data<S: Storage>(&self, storage: &S) -> Result<Vec<u8>> {
         let mut data: Vec<u8> = Vec::new();

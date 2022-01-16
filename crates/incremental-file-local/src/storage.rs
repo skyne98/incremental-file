@@ -31,14 +31,18 @@ impl<C: Converter> FileSystemStorage<C> {
 #[async_trait]
 impl<C: Converter> Storage for FileSystemStorage<C> {
     // Files
-    async fn get_file(&self, hash: &str) -> Result<File> {
+    async fn get_file(&self, hash: &str) -> Result<Option<File>> {
         self.ensure_dirs().await?;
         let path = self.file_dir.join(hash);
-        let bytes = tokio::fs::read(path)
-            .await
-            .context(format!("File with {} doesn't exist", hash))?;
-        let file = self.converter.deserialize_file(bytes.as_slice())?;
-        Ok(file)
+        if path.exists() {
+            let bytes = tokio::fs::read(path)
+                .await
+                .context(format!("There was an issue reading file {}", hash))?;
+            let file = self.converter.deserialize_file(bytes.as_slice())?;
+            Ok(Some(file))
+        } else {
+            Ok(None)
+        }
     }
     async fn file_exists(&self, hash: &str) -> Result<bool> {
         self.ensure_dirs().await?;

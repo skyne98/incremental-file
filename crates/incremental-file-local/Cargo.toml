@@ -8,3 +8,4 @@ anyhow = "1.0.51"
 tokio = { version = "1.15.0", features = ["fs"] }
 async-trait = "0.1.52"
 incremental-file = { path = "../../../incremental-file" }
+blake3 = "1.2.0"

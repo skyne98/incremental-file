@@ -1,4 +1,7 @@
-use crate::block::Block;
+use crate::{
+    block::Block,
+    storage::{BoxedStorage, Storage},
+};
 use anyhow::{Context, Result};
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
@@ -14,7 +17,12 @@ impl File {
     pub fn new(blocks: Vec<Block>, hash: String) -> File {
         File { blocks, hash }
     }
-    pub fn from_data(data: Vec<u8>, block_size: u64) -> Self {
+    pub async fn from_data<D: AsRef<[u8]>, S: Storage>(
+        data: D,
+        block_size: u64,
+        storage: &mut S,
+    ) -> Result<Self> {
+        let data = data.as_ref();
         let mut blocks = Vec::new();
         let mut data_iter = data.iter();
         let mut block_data = Vec::new();
@@ -24,17 +32,19 @@ impl File {
             block_length += 1;
             if block_length == block_size {
                 let block = Block::from_data(block_data);
-                blocks.push(block);
+                blocks.push(block.clone());
+                storage.upsert_block_data(&block, data).await?;
                 block_data = Vec::new();
                 block_length = 0;
             }
         }
         if block_data.len() > 0 {
             let block = Block::from_data(block_data);
-            blocks.push(block);
+            blocks.push(block.clone());
+            storage.upsert_block_data(&block, data).await?;
         }
-        let hash = format!("{}", blake3::hash(data.as_slice()));
-        File { blocks, hash }
+        let hash = format!("{}", blake3::hash(data));
+        Ok(File { blocks, hash })
     }
     pub fn hash(&self) -> Result<Hash> {
         let hash = self.hash.parse()?;
@@ -52,38 +62,35 @@ impl File {
 
         Ok(())
     }
-    pub fn recalculate_hash(&mut self) -> Result<()> {
-        let mut data = Vec::new();
-        for block in &self.blocks {
-            data.extend(block.data.as_ref().expect("Block data is empty"));
-        }
-        let hash = format!("{}", blake3::hash(data.as_slice()));
-        self.hash = hash;
-        Ok(())
-    }
-    pub fn data(&self) -> Result<Vec<u8>> {
+    pub async fn data<S: Storage>(&self, storage: &S) -> Result<Vec<u8>> {
         let mut data: Vec<u8> = Vec::new();
         for block in &self.blocks {
-            data.extend(block.data.as_ref().expect("Block data is empty"));
+            data.extend(
+                storage
+                    .get_block_data(&block)
+                    .await?
+                    .expect("Block data is empty"),
+            );
         }
         Ok(data)
     }
-    pub fn validate(&self) -> Result<()> {
+    pub async fn validate<S: Storage>(&self, storage: &S) -> Result<()> {
         let hash = self.hash()?;
-        let hash_data = blake3::hash(self.data()?.as_slice());
+        let data = self.data(storage).await?;
+        let hash_data = blake3::hash(data.as_slice());
         if hash != hash_data {
             Err(anyhow::anyhow!("Invalid hash"))
         } else {
             Ok(())
         }
     }
-    pub fn unfinished_blocks(&self) -> Vec<&Block> {
+    pub async fn unfinished_blocks<S: Storage>(&self, storage: &S) -> Result<Vec<Block>> {
         let mut unfinished_blocks = Vec::new();
         for block in &self.blocks {
-            if block.data.is_none() {
+            if storage.block_exists(&block).await? {
                 unfinished_blocks.push(block.clone());
             }
         }
-        unfinished_blocks
+        Ok(unfinished_blocks)
     }
 }

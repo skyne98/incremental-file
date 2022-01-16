@@ -6,5 +6,5 @@ pub type BoxedAcquirer = Box<dyn Acquirer>;
 /// Reads or downloads file blocks from the external source.
 #[async_trait]
 pub trait Acquirer {
-    async fn get_block(&self, file_hash: &str, hash: &str) -> Result<Block>;
+    async fn get_block(&self, block: &Block) -> Result<Vec<u8>>;
 }

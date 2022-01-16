@@ -2,26 +2,21 @@ use anyhow::Result;
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Block {
     pub length: u64,
-    pub data: Option<Vec<u8>>,
     pub hash: String,
 }
 
 impl Block {
     pub fn new(length: u64, hash: String) -> Block {
-        Block {
-            length,
-            data: None,
-            hash,
-        }
+        Block { length, hash }
     }
-    pub fn from_data(data: Vec<u8>) -> Self {
-        let hash = format!("{}", blake3::hash(data.as_slice()));
+    pub fn from_data<D: AsRef<[u8]>>(data: D) -> Self {
+        let data = data.as_ref();
+        let hash = format!("{}", blake3::hash(data));
         Block {
             length: data.len() as u64,
-            data: Some(data),
             hash,
         }
     }
@@ -29,24 +24,19 @@ impl Block {
         let hash = self.hash.parse()?;
         Ok(hash)
     }
-    pub fn update(&mut self, data: Vec<u8>) {
+    pub fn update<D: AsRef<[u8]>>(&mut self, data: D) {
+        let data = data.as_ref();
         self.length = data.len() as u64;
-        self.hash = format!("{}", blake3::hash(data.as_slice()));
-        self.data = Some(data);
+        self.hash = format!("{}", blake3::hash(data));
     }
-    pub fn validate(&self) -> Result<()> {
-        if let Some(data) = &self.data {
-            let hash = self.hash()?;
-            let hash_data = blake3::hash(data.as_slice());
-            if hash != hash_data {
-                Err(anyhow::anyhow!("Invalid hash"))
-            } else {
-                Ok(())
-            }
+    pub fn validate<D: AsRef<[u8]>>(&self, data: D) -> Result<()> {
+        let data = data.as_ref();
+        let hash = self.hash()?;
+        let hash_data = blake3::hash(data);
+        if hash != hash_data {
+            Err(anyhow::anyhow!("Invalid hash"))
         } else {
-            return Err(anyhow::anyhow!(
-                "Block data is empty, probably it wasn't received yet"
-            ));
+            Ok(())
         }
     }
 }

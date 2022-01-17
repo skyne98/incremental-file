@@ -6,6 +6,9 @@ Inside of the `crates/` directory, you can find the following additional librari
 - `crates/incremental-file-http`: An implementation of the `Acquirer` that receives chunks from an HTTP server
 - `crates/incremental-file-converter-*`: Serialization of files and blocks using `bincode`, `json` or `toml`
 
+### Security
+Files can be cryptographically signed using the `ring` crate. See the [example](#example) below. 
+
 ### Example
 #### Creating a new file
 ```rust
